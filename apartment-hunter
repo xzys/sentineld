@@ -26,15 +26,21 @@ PULL_INTERVAL = 3600
 THROTTLE_TIME = 1
 
 
+def get_google_sheet():
+  sa = SpreadsheetApp(TOKEN_PATH)
+  return sa.open_by_id(SHEET_NAME)
+
+
 def get_apartments_from_google_sheets(local=False):
+  '''pull data from google sheets and save as JSON'''
   if local:
     l.info('Using local spreadsheet data')
     with open(LOCAL_SHEETS_DATA_FN) as f:
       return json.loads(f.read())
   else:
     l.info('Getting data from spreadsheet...')
-    sa = SpreadsheetApp(TOKEN_PATH)
-    s = sa.open_by_id(SHEET_NAME).sheets[0]
+    sp = get_google_sheet()
+    s = sp.sheets[0]
     table = Table(s.get_data_range())
 
     data = [{k.lower(): v for k, v in a.to_dict().items()}
@@ -80,8 +86,12 @@ def extract_dump(d):
         res.append({
           'model': model_name,
           'unit': u.select_one('.unitColumn').text.strip(),
-          'price': u.select_one('.pricingColumn').text.strip(),
-          'sqft': u.select_one('.sqftColumn').text.strip(),
+          'price': int(u.select_one('.pricingColumn').text.strip()
+            .replace('$', '').replace(',', '')
+            ),
+          'sqft': int(u.select_one('.sqftColumn').text.strip()
+            .replace(',', '')
+            ),
           'available': u.select_one('.availableColumn').text.strip(),
           })
   else:
@@ -89,7 +99,7 @@ def extract_dump(d):
   return res
 
 
-def main(args):
+def update_dumps(args):
   conn, c = get_db()
   
   # get latest dumps for each url
@@ -119,11 +129,79 @@ def main(args):
       d = dumps_by_url[a['url']]
 
     # extract data
-    units = extract_dump(d)
-    if units is not None:
-      l.info(f'Found {len(units)} units')
-      for u in units:
+    data = extract_dump(d)
+    if data is not None:
+      l.info(f'Found {len(data)} units')
+      for u in data:
         l.info(f'{json.dumps(u)}')
+
+
+def get_price_history(args):
+  conn, c = get_db()
+
+  apmts = get_apartments_from_google_sheets(True)
+  unit_data = {}
+  hist = {}
+  for i, a in enumerate(apmts):
+    res = c.execute('''
+    SELECT t1.*
+    FROM dumps t1
+    WHERE status = 200 AND url = ?
+    ORDER BY timestamp
+    ''', (a['url'],))
+
+    for r in res:
+      d = Dump(*r)
+      data = extract_dump(d)
+
+      for u in data:
+        k = (i, u['model'], u['unit'])
+        if k not in unit_data:
+          unit_data[k] = u
+
+        if k not in hist:
+          hist[k] = []
+        # elif hist[k][-1][0] == u['price']:
+        #   continue
+
+        hist[k].append((
+          u['price'],
+          dt.fromtimestamp(d.timestamp).date(),
+          # dt.fromtimestamp(d.timestamp).strftime('%b %-d %Y')
+          ))
+    
+  hdata = sorted(hist.items(), key=lambda p: p[0])
+  # for (index, model, unit), h in hdata:
+  #   l.info(f"{colored(apmts[index]['name'], 'green')}: {model}/{unit}: {h}")
+
+
+  dates = [d for k, h in hdata for p, d in h]
+  min_date, max_date = min(dates), max(dates)
+  vals = [[None for n in range((max_date - min_date).days + 3)]
+      for _ in range(len(hdata) + 1)]
+
+  for j, (k, h) in enumerate(hdata):
+    index, model, unit = k
+    vals[j+1][0] = apmts[index]['name']
+    vals[j+1][1] = f'{model}/{unit}'
+
+  for n in range((max_date - min_date).days + 1):
+    d = min_date + timedelta(days=n)
+    vals[0][n+2] = d.strftime('%b %-d %Y')
+
+    for j, (k, h) in enumerate(hdata):
+      p = next((p for p, date in h if date == d), None)
+      vals[j+1][n+2] = p
+
+  l.info('Updating spreadsheet')
+  sp = get_google_sheet()
+  s = sp.sheets[1]
+  s.get_data_range().set_value(None)
+
+  dr = s.get_range(row=1, column=1,
+      number_of_row=len(vals), number_of_column=len(vals[0]))
+  dr.set_values(vals)
+  sp.commit()
 
 
 
@@ -132,6 +210,13 @@ if __name__ == "__main__":
   # l.basicConfig(level=l.DEBUG)
 
   parser = argparse.ArgumentParser(description='apartment hunter')
-  parser.add_argument('--local', action="store_true", help='use local sheets data')
+  parser.add_argument('action', choices=('update', 'history'))
+  parser.add_argument('--local',
+      action="store_true", help='use local sheets data')
+  parser.add_argument('--update-schema',
+      action="store_true", help='run schema up')
   args = parser.parse_args()
-  main(args)
+  {
+      'update': update_dumps,
+      'history': get_price_history,
+      }[args.action](args)

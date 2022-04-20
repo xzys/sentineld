@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 DBNAME = 'dumps.db'
 SCHEMA_UP_SQL = '''
-CREATE TABLE dumps (
+CREATE TABLE dumps IF NOT EXISTS (
   id INTEGER PRIMARY KEY,
   url TEXT NOT NULL,
   timestamp INTEGER NOT NULL,
