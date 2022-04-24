@@ -29,7 +29,7 @@ def get_updated_dump(a, dumps_by_url):
   if not delta or delta.total_seconds() > PULL_INTERVAL:
     l.info(f"Pulling data for: {colored(a['name'], 'green')} after {str(delta)}")
     r = requests.get(a['url'], headers=HEADERS)
-    d = Dump(0, a['url'], dt.now().timestamp(), r.status_code, r.text)
+    d = Dump(0, a['url'], dt.now().timestamp(), r.status_code, r.text, None)
     return d
 
   else:
@@ -38,7 +38,7 @@ def get_updated_dump(a, dumps_by_url):
 
 
 def extract_dump(d):
-  ''''''
+  '''pull important info from page'''
   bs = BeautifulSoup(d.body, features='lxml')
   res = []
   if 'apartments.com' in d.url:
@@ -87,19 +87,34 @@ def update_dumps(args):
   apmts = get_apartments_from_google_sheets(local=args.local)
   for a in apmts:
     d = get_updated_dump(a, dumps_by_url)
+    data = None
     if d:
       # new dump pulled
+      data = extract_dump(d)
+      d.extracted = json.dumps(data)
+
       d.insert(conn, c)
       dumps_by_url[d.url] = d
       time.sleep(THROTTLE_TIME)
     else:
       d = dumps_by_url[a['url']]
+      if d.extracted:
+        data = json.loads(d.extracted)
 
-    # extract data
-    data = extract_dump(d)
     if data is not None:
       l.info(f'Found {len(data)} units')
       for u in data:
         l.info(f'{json.dumps(u)}')
 
 
+def reextract_dumps(args):
+  conn, c = get_db()
+
+  res = c.execute('''SELECT * FROM dumps''').fetchall()
+  for r in res:
+    d = Dump(*r)
+    data = extract_dump(d)
+    c.execute('''UPDATE dumps SET extracted = ? WHERE id = ?''',
+        (json.dumps(data), d.id))
+  conn.commit()
+  l.info(f'Re-extracted {len(res)} dumps!')

@@ -2,7 +2,7 @@
 import argparse
 import logging as l
 from history import sync_price_history
-from update import update_dumps
+from update import update_dumps, reextract_dumps
 from schema import get_db
 
 
@@ -11,6 +11,7 @@ if __name__ == "__main__":
 
   action_funcs = {
       'update': update_dumps,
+      'reextract': reextract_dumps,
       'history': sync_price_history,
       'migrate': lambda args: get_db(migrate=True),
       }

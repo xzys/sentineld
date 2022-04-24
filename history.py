@@ -26,7 +26,7 @@ def get_price_history(apmts, conn, c):
 
     for r in res:
       d = Dump(*r)
-      data = extract_dump(d)
+      data = json.loads(d.extracted)
 
       for u in data:
         k = (i, u['model'], u['unit'])

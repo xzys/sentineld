@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS dumps (
   url TEXT NOT NULL,
   timestamp INTEGER NOT NULL,
   status INTEGER NOT NULL,
-  body TEXT NOT NULL
+  body TEXT NOT NULL,
+  extracted JSON 
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -33,6 +34,7 @@ class Dump:
   timestamp: int
   status: int
   body: str
+  extracted: str
 
   def insert(self, conn, c):
     return _insert(conn, c, self, 'dumps',
