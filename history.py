@@ -4,8 +4,14 @@ import logging as l
 from termcolor import colored
 from datetime import datetime as dt
 from datetime import timedelta
+from update import extract_dump
 from sheets import get_google_sheet, get_apartments_from_google_sheets
 from schema import Dump, Notification, NotificationAction, get_db
+from notify import create_email, send_email, check_notify_price_change
+
+
+with open('secrets/recipients') as f:
+  EMAIL_RECIPIENTS = f.read().strip().split('\n')
 
 
 def get_price_history(apmts, conn, c):
@@ -35,20 +41,17 @@ def get_price_history(apmts, conn, c):
         hist[k].append((
           u['price'],
           dt.fromtimestamp(d.timestamp),
-          # dt.fromtimestamp(d.timestamp).strftime('%b %-d %Y')
           ))
 
   hdata = sorted(hist.items(), key=lambda p: p[0])
-  return hdata
+  return hdata, unit_data
 
 
 def sync_price_history(args):
   '''sync price history by day to google sheets'''
   conn, c = get_db()
   apmts = get_apartments_from_google_sheets(True)
-  hdata = get_price_history(apmts, conn, c)
-  # for (index, model, unit), h in hdata:
-  #   l.info(f"{colored(apmts[index]['name'], 'green')}: {model}/{unit}: {h}")
+  hdata, unit_data = get_price_history(apmts, conn, c)
 
   dates = [t.date() for k, h in hdata for p, t in h]
   min_date, max_date = min(dates), max(dates)
@@ -70,7 +73,7 @@ def sync_price_history(args):
       vals[j+1][n+2] = p
 
       if d == max_date and p is not None:
-        nf = check_notify_price_change(conn, c, apmts, k, p, t)
+        nf = check_notify_price_change(conn, c, apmts, unit_data, k, p, t)
         if nf:
           notifications.append(nf)
 
@@ -85,37 +88,11 @@ def sync_price_history(args):
     dr.set_values(vals)
     sp.commit()
 
-  l.info(f'Sending {len(notifications)} notifications')
-  for n in notifications:
-    if True or not args.dry_run:
-      n.insert(conn, c)
+  if len(notifications):
+    l.info(f'Sending {len(notifications)} notifications')
 
+    send_email(EMAIL_RECIPIENTS, notifications)
 
-def check_notify_price_change(conn, c, apmts, k, p, t):
-  '''notify user on price change'''
-  index, model, unit = k
-  r = c.execute('''
-      SELECT *
-      FROM notifications
-      WHERE name = ? AND unit = ?
-      ORDER BY last_notified DESC
-      LIMIT 1
-      ''', (apmts[index]['name'], unit)).fetchone()
-  action = None
-  data = {'price': p}
-  if r:
-    n = Notification(*r)
-    nd = json.loads(n.data)
-    if nd['price'] != p:
-      data['last_price'] = nd['price']
-      action = (
-          NotificationAction.PRICE_INCREASE if p > nd['price'] else
-          NotificationAction.PRICE_DECREASE)
-  else:
-    action = NotificationAction.ADDED
-
-  if action:
-    return Notification(0, apmts[index]['name'], unit, int(t.timestamp()), action.name, json.dumps(data))
-  return None
-
-
+    for n in notifications:
+      if not args.dry_run:
+        n.insert(conn, c)
