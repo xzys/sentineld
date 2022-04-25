@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 import os
+import hashlib
 import json
 import sqlite3
 import logging as l
 from enum import Enum
 from dataclasses import dataclass
 
-DBNAME = 'dumps.db'
+DBNAME = (
+    'data/dumps.db' if 'GCS_BUCKET_NAME' not in os.environ else
+    '/tmp/dumps.db')
+
 SCHEMA_UP_SQL = '''
 CREATE TABLE IF NOT EXISTS dumps (
   id INTEGER PRIMARY KEY,
@@ -38,7 +42,7 @@ class Dump:
 
   def insert(self, conn, c):
     return _insert(conn, c, self, 'dumps',
-        ('url', 'timestamp', 'status', 'body'))
+        ('url', 'timestamp', 'status', 'body', 'extracted'))
 
 
 class NotificationAction(Enum):
@@ -82,3 +86,11 @@ def get_db(migrate=False):
     l.info('Database not found/outdated. Setting up schema...')
     c.executescript(SCHEMA_UP_SQL)
   return conn, c
+
+
+def get_db_hash():
+  h = hashlib.md5()
+  with open(DBNAME, 'rb') as f:
+    for chunk in iter(lambda: f.read(128 * h.block_size), b''):
+      h.update(chunk)
+  return h.hexdigest()

@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup, Tag
 from email.message import EmailMessage
 
 
-with open('secrets/email_creds') as f:
+with open('secrets/email-creds') as f:
   lines = f.readlines()
   EMAIL_SENDER = lines[0].strip()
   EMAIL_PASSWORD = lines[1].strip()

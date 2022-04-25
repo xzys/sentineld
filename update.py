@@ -39,7 +39,8 @@ def get_updated_dump(a, dumps_by_url):
 
 def extract_dump(d):
   '''pull important info from page'''
-  bs = BeautifulSoup(d.body, features='lxml')
+  # bs = BeautifulSoup(d.body, features='lxml')
+  bs = BeautifulSoup(d.body, features='html.parser')
   res = []
   if 'apartments.com' in d.url:
     models = bs.select('#pricingView > div[data-tab-content-id="bed1"] .pricingGridItem')

@@ -1,5 +1,6 @@
 *.swp
 __pycache__
+data
 secrets
-dumps.db
-sheets_data.json
+build
+.DS_Store

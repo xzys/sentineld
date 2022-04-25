@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import json
 import logging as l
 from termcolor import colored
@@ -10,8 +11,12 @@ from schema import Dump, Notification, NotificationAction, get_db
 from notify import create_email, send_email, check_notify_price_change
 
 
-with open('secrets/recipients') as f:
-  EMAIL_RECIPIENTS = f.read().strip().split('\n')
+EMAIL_RECIPIENTS = None
+if 'EMAIL_RECIPIENTS' in os.environ:
+  EMAIL_RECIPIENTS = os.environ['EMAIL_RECIPIENTS'].split(',')
+else:
+  with open('secrets/recipients') as f:
+    EMAIL_RECIPIENTS = f.read().strip().split('\n')
 
 
 def get_price_history(apmts, conn, c):
