@@ -94,7 +94,8 @@ def update_dumps(args):
       data = extract_dump(d)
       d.extracted = json.dumps(data)
 
-      d.insert(conn, c)
+      if not args.dry_run:
+        d.insert(conn, c)
       dumps_by_url[d.url] = d
       time.sleep(THROTTLE_TIME)
     else:

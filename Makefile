@@ -12,7 +12,7 @@ upload:
 
 
 download:
-	cp data/dumps.db data/dumps.db.bkp
-	cp data/sheets_data.json data/sheets_data.json.bkp
-	gsutil cp gs://sentineld-data/dumps.db data/
-	gsutil cp gs://sheets_data.json data/
+	for f in data/{dumps.db,sheets_data.json}; do \
+		cp "$$f" "$$f.bkp"; \
+		gsutil cp gs://sentineld-data/`basename $$f` data/; \
+	done;
