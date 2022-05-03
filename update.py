@@ -93,6 +93,7 @@ def update_dumps(args):
       # new dump pulled
       data = extract_dump(d)
       d.extracted = json.dumps(data)
+      d.body = ''
 
       if not args.dry_run:
         d.insert(conn, c)
