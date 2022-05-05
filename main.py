@@ -4,7 +4,7 @@ import sys
 import json
 import argparse
 import logging as l
-from history import sync_price_history
+from history import sync_price_history, view_price_history
 from update import update_dumps, reextract_dumps
 from schema import get_db, get_db_hash, DBNAME
 from sheets import SHEETS_DATA_FN
@@ -57,6 +57,7 @@ def main(argv=None):
       'update': update_dumps,
       'reextract': reextract_dumps,
       'history': sync_price_history,
+      'view-history': view_price_history,
       'migrate': lambda args: get_db(migrate=True),
       }
 
